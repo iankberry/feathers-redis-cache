@@ -75,6 +75,7 @@ export async function purgeGroup(client, group: string, prefix: string = 'frc_')
 
 export default {
   before(passedOptions: any = {}) {
+
     if (DISABLE_REDIS_CACHE) {
       return hook => hook;
     }
@@ -93,9 +94,17 @@ export default {
             return resolve(hook);
           }
 
+          const hookPath = hook.path || 'general';
+          hook.params.cacheGroupName = `${hookPath}/find`;
+
+          if (hook.id) {
+            hook.params.cacheGroupName = `${hookPath}/${hook.id}`
+          }
+
           const group = typeof options.cacheGroupKey === 'function' ?
             hashCode(`group-${options.cacheGroupKey(hook)}`) :
-            hashCode(`group-${hook.path || 'general'}`);
+            hashCode(`group-${hook.params.cacheGroupName}`);
+            
           const path = typeof options.cacheKey === 'function' ?
             `${group}${options.cacheKey(hook)}` :
             `${group}${cacheKey(hook)}`;
@@ -120,8 +129,8 @@ export default {
               hook.params.$skipCacheHook = true;
 
               if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
-                console.log(`${chalk.cyan('[redis]')} returning cached value for ${chalk.green(path)}.`);
-                console.log(`> Expires on ${duration}.`);
+                console.log(`${chalk.cyan('[redis]')} returning cached value for ${chalk.yellow(hook.params.cacheGroupName)} -> ${chalk.green(path)}.`);
+                console.log(`>>> Expires on ${duration}.`);
               }
 
               return resolve(hook);
@@ -169,11 +178,12 @@ export default {
             cache: hook.result,
             expiresOn: moment().add(moment.duration(duration, 'seconds')),
           }));
+
           client.expire(cacheKey, duration);
 
           if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
-            console.log(`${chalk.cyan('[redis]')} added ${chalk.green(cacheKey)} to the cache.`);
-            console.log(`> Expires in ${moment.duration(duration, 'seconds').humanize()}.`);
+            console.log(`${chalk.cyan('[redis]')} added ${chalk.green(hook.params.cacheGroupName)} ${chalk.green(cacheKey)} to the cache.`);
+            console.log(`>>> Expires in ${moment.duration(duration, 'seconds').humanize()}.`);
           }
 
           resolve(hook);
@@ -194,11 +204,9 @@ export default {
         return new Promise((resolve) => {
           const client = hook.app.get('redisClient');
           const options: any = { ...defaults, ...passedOptions };
+          
           const { prefix } = hook.app.get('redis');
-          const group = typeof options.cacheGroupKey === 'function' ?
-            hashCode(`group-${options.cacheGroupKey(hook)}`) :
-            hashCode(`group-${hook.path || 'general'}`);
-
+          
           if (!client) {
             return {
               message: 'Redis unavailable',
@@ -206,11 +214,35 @@ export default {
             };
           }
 
-          purgeGroup(client, group, prefix)
+          const groupList = typeof options.cacheGroupListKey === 'function' ?
+            hashCode(`group-${options.cacheGroupListKey(hook)}`) :
+            hashCode(`group-${`${hook.path}/find` || 'general'}`);
+
+          if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
+            console.log(`${chalk.cyan('[redis]')} deleting group ${chalk.yellow(`${hook.path}/find`)} -> ${groupList}`);
+          }
+          
+          purgeGroup(client, groupList, prefix)
             .catch((err) => console.error({
               message: err.message,
               status: HTTP_SERVER_ERROR,
             }));
+
+          if (hook.id) {
+            const groupItem = typeof options.cacheGroupItemKey === 'function' ?
+              hashCode(`group-${options.cacheGroupItemKey(hook)}`) :
+              hashCode(`group-${`${hook.path}/${hook.id}` || 'general'}`);
+            
+              if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
+                console.log(`${chalk.cyan('[redis]')} deleting group ${chalk.yellow(`${hook.path}/${hook.id}`)} -> ${groupItem}`);
+              }
+
+            purgeGroup(client, groupItem, prefix)
+              .catch((err) => console.error({
+                message: err.message,
+                status: HTTP_SERVER_ERROR,
+              }));
+          }
 
           // do not wait for purge to resolve
           resolve(hook);

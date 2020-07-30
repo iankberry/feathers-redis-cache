@@ -11,10 +11,11 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
         function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
@@ -49,6 +50,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.purgeGroup = exports.hashCode = void 0;
 var moment_1 = __importDefault(require("moment/moment"));
 var chalk_1 = __importDefault(require("chalk"));
 var qs_1 = __importDefault(require("qs"));
@@ -135,13 +137,18 @@ exports.default = {
                 }
                 return new Promise(function (resolve) {
                     var client = hook.app.get('redisClient');
-                    var options = __assign({}, defaults, passedOptions);
+                    var options = __assign(__assign({}, defaults), passedOptions);
                     if (!client) {
                         return resolve(hook);
                     }
-                    var group = typeof options.cacheKey === 'function' ?
+                    var hookPath = hook.path || 'general';
+                    hook.params.cacheGroupName = hookPath + "/find";
+                    if (hook.id) {
+                        hook.params.cacheGroupName = hookPath + "/" + hook.id;
+                    }
+                    var group = typeof options.cacheGroupKey === 'function' ?
                         hashCode("group-" + options.cacheGroupKey(hook)) :
-                        hashCode("group-" + (hook.path || 'general'));
+                        hashCode("group-" + hook.params.cacheGroupName);
                     var path = typeof options.cacheKey === 'function' ?
                         "" + group + options.cacheKey(hook) :
                         "" + group + cacheKey(hook);
@@ -159,8 +166,8 @@ exports.default = {
                             hook.result = data.cache;
                             hook.params.$skipCacheHook = true;
                             if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
-                                console.log(chalk_1.default.cyan('[redis]') + " returning cached value for " + chalk_1.default.green(path) + ".");
-                                console.log("> Expires on " + duration + ".");
+                                console.log(chalk_1.default.cyan('[redis]') + " returning cached value for " + chalk_1.default.yellow(hook.params.cacheGroupName) + " -> " + chalk_1.default.green(path) + ".");
+                                console.log(">>> Expires on " + duration + ".");
                             }
                             return resolve(hook);
                         }
@@ -191,7 +198,7 @@ exports.default = {
                 }
                 return new Promise(function (resolve) {
                     var client = hook.app.get('redisClient');
-                    var options = __assign({}, defaults, passedOptions);
+                    var options = __assign(__assign({}, defaults), passedOptions);
                     var duration = options.expiration || options.defaultExpiration;
                     var cacheKey = hook.params.cacheKey;
                     if (!client) {
@@ -203,8 +210,8 @@ exports.default = {
                     }));
                     client.expire(cacheKey, duration);
                     if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
-                        console.log(chalk_1.default.cyan('[redis]') + " added " + chalk_1.default.green(cacheKey) + " to the cache.");
-                        console.log("> Expires in " + moment_1.default.duration(duration, 'seconds').humanize() + ".");
+                        console.log(chalk_1.default.cyan('[redis]') + " added " + chalk_1.default.green(hook.params.cacheGroupName) + " " + chalk_1.default.green(cacheKey) + " to the cache.");
+                        console.log(">>> Expires in " + moment_1.default.duration(duration, 'seconds').humanize() + ".");
                     }
                     resolve(hook);
                 });
@@ -224,22 +231,38 @@ exports.default = {
             try {
                 return new Promise(function (resolve) {
                     var client = hook.app.get('redisClient');
-                    var options = __assign({}, defaults, passedOptions);
+                    var options = __assign(__assign({}, defaults), passedOptions);
                     var prefix = hook.app.get('redis').prefix;
-                    var group = typeof options.cacheKey === 'function' ?
-                        hashCode("group-" + options.cacheGroupKey(hook)) :
-                        hashCode("group-" + (hook.path || 'general'));
                     if (!client) {
                         return {
                             message: 'Redis unavailable',
                             status: HTTP_SERVER_ERROR,
                         };
                     }
-                    purgeGroup(client, group, prefix)
+                    var groupList = typeof options.cacheGroupListKey === 'function' ?
+                        hashCode("group-" + options.cacheGroupListKey(hook)) :
+                        hashCode("group-" + (hook.path + "/find" || 'general'));
+                    if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
+                        console.log(chalk_1.default.cyan('[redis]') + " deleting group " + chalk_1.default.yellow(hook.path + "/find") + " -> " + groupList);
+                    }
+                    purgeGroup(client, groupList, prefix)
                         .catch(function (err) { return console.error({
                         message: err.message,
                         status: HTTP_SERVER_ERROR,
                     }); });
+                    if (hook.id) {
+                        var groupItem = typeof options.cacheGroupItemKey === 'function' ?
+                            hashCode("group-" + options.cacheGroupItemKey(hook)) :
+                            hashCode("group-" + (hook.path + "/" + hook.id || 'general'));
+                        if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
+                            console.log(chalk_1.default.cyan('[redis]') + " deleting group " + chalk_1.default.yellow(hook.path + "/" + hook.id) + " -> " + groupItem);
+                        }
+                        purgeGroup(client, groupItem, prefix)
+                            .catch(function (err) { return console.error({
+                            message: err.message,
+                            status: HTTP_SERVER_ERROR,
+                        }); });
+                    }
                     resolve(hook);
                 });
             }
