@@ -160,6 +160,7 @@ exports.default = {
                             var duration = moment_1.default(data.expiresOn).format('DD MMMM YYYY - HH:mm:ss');
                             hook.result = data.cache;
                             hook.params.$skipCacheHook = true;
+                            hook.params.$cachedResult = true;
                             if (options.env !== 'test' && ENABLE_REDIS_CACHE_LOGGER === 'true') {
                                 console.log(chalk_1.default.cyan('[redis]') + " returning cached value for " + chalk_1.default.yellow(hook.params.cacheGroupName) + " -> " + chalk_1.default.green(path) + ".");
                                 console.log(">>> Expires on " + duration + ".");
