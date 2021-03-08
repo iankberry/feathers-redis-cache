@@ -57,7 +57,6 @@ export async function purgeGroup(client, group: string, prefix: string = 'frc_')
         // }, []);
 
         async.eachOfLimit(keys, 10, (batch, idx, cb) => {
-          console.log('batch', batch);
           if (client.unlink) {
             client.unlink(batch.replace(prefix, ''), cb);
           } else {
