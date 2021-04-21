@@ -17,7 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var redis_1 = __importDefault(require("redis"));
 var chalk_1 = __importDefault(require("chalk"));
 var DISABLE_REDIS_CACHE = process.env.DISABLE_REDIS_CACHE;
-var defaultPrefix = 'frc_';
+var defaultPrefix = "frc_";
 exports.default = (function (options) {
     if (options === void 0) { options = {}; }
     var errorLogger = options.errorLogger || console.error;
@@ -27,23 +27,25 @@ exports.default = (function (options) {
     }
     return function client() {
         var app = this;
-        var config = app.get('redis') || {};
+        var config = app.get("redis") || {};
         try {
             var redisOptions = __assign({ prefix: defaultPrefix }, config, { retry_strategy: function () {
-                    app.set('redisClient', undefined);
-                    console.log(chalk_1.default.yellow('[redis]') + " not connected");
+                    app.set("redisClient", undefined);
+                    console.log(chalk_1.default.yellow("[redis]") + " not connected");
                     return retryInterval;
                 } });
             var client_1 = redis_1.default.createClient(redisOptions);
-            app.set('redisClient', client_1);
-            client_1.on('ready', function () {
-                app.set('redisClient', client_1);
-                console.log(chalk_1.default.green('[redis]') + " connected");
+            app.set("redisClient", client_1);
+            client_1.on("ready", function () {
+                app.set("redisClient", client_1);
+                if (process.env.NODE_ENV !== "test") {
+                    console.log(chalk_1.default.green("[redis]") + " connected");
+                }
             });
         }
         catch (err) {
             errorLogger(err);
-            app.set('redisClient', undefined);
+            app.set("redisClient", undefined);
         }
         return this;
     };
