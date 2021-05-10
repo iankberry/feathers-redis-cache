@@ -57,7 +57,7 @@ var _a = process.env, DISABLE_REDIS_CACHE = _a.DISABLE_REDIS_CACHE, ENABLE_REDIS
 var HTTP_OK = 200;
 var HTTP_SERVER_ERROR = 500;
 var defaults = {
-    defaultExpiration: 3600 * 24,
+    defaultExpiration: 60 * 20,
 };
 function hashCode(s) {
     var h;

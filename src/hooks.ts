@@ -8,7 +8,7 @@ const { DISABLE_REDIS_CACHE, ENABLE_REDIS_CACHE_LOGGER } = process.env;
 const HTTP_OK = 200;
 const HTTP_SERVER_ERROR = 500;
 const defaults = {
-  defaultExpiration: 3600 * 24, // seconds
+  defaultExpiration: 60 * 20, // seconds
 };
 
 export function hashCode(s: string): string {
